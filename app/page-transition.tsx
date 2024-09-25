@@ -24,17 +24,30 @@ function useThrottle<T extends (...args: never[]) => void>(
   func: T,
   delay: number
 ): T {
-  const isThrottling = useRef(false); // Replaces `isNavigating`
+  const lastRun = useRef(0);
 
   return useCallback((...args: Parameters<T>) => {
-    if (!isThrottling.current) {
-      func(...args); // Run the function if not throttled
-      isThrottling.current = true; // Set throttle flag
-
-      setTimeout(() => {
-        isThrottling.current = false; // Reset the throttle after delay
-      }, delay);
+    const now = Date.now();
+    if (now - lastRun.current >= delay) {
+      func(...args);
+      lastRun.current = now;
     }
+  }, [func, delay]) as T;
+}
+
+function useDebounce<T extends (...args: never[]) => void>(
+  func: T,
+  delay: number
+): T {
+  const timeout = useRef<NodeJS.Timeout | null>(null);
+
+  return useCallback((...args: Parameters<T>) => {
+    if (timeout.current) {
+      clearTimeout(timeout.current);
+    }
+    timeout.current = setTimeout(() => {
+      func(...args);
+    }, delay);
   }, [func, delay]) as T;
 }
 
@@ -49,28 +62,39 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
     exit: { opacity: 0 },
   };
 
+  const isScrolling = useRef(false); // Track if a scroll event is in progress
+
   const handleScroll = useCallback((e: WheelEvent) => {
+    if (isScrolling.current) return; // Prevent multiple navigation triggers
+
     e.preventDefault();
-    
+
     const currentIndex = routes.indexOf(pathname);
     const direction = e.deltaY > 0 ? 1 : -1;
     const newIndex = (currentIndex + direction + routes.length) % routes.length;
 
     if (newIndex !== currentIndex) {
+      isScrolling.current = true; // Set flag to prevent further scrolling
+
       router.push(routes[newIndex]);
       console.log('Navigating to next route:', routes[newIndex]);
+
+      setTimeout(() => {
+        isScrolling.current = false; // Reset after delay (2 seconds)
+      }, 2000); // 2 seconds delay
     }
   }, [pathname, router, routes]);
 
-  const throttledHandleScroll = useThrottle(handleScroll, 2000);
+  const throttledHandleScroll = useThrottle(handleScroll, 1000); // Add throttle
+  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 100); // Add debounce to prevent rapid scroll events
 
   useEffect(() => {
-    window.addEventListener('wheel', throttledHandleScroll, { passive: false });
+    window.addEventListener('wheel', debouncedHandleScroll, { passive: false });
 
     return () => {
-      window.removeEventListener('wheel', throttledHandleScroll);
+      window.removeEventListener('wheel', debouncedHandleScroll);
     };
-  }, [throttledHandleScroll]);
+  }, [debouncedHandleScroll]);
 
   return (
     <div className='h-screen w-screen flex overflow-hidden'>
