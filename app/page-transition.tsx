@@ -85,8 +85,8 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
     }
   }, [pathname, router, routes]);
 
-  const throttledHandleScroll = useThrottle(handleScroll, 10000); // Add throttle
-  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 100); // Add debounce to prevent rapid scroll events
+  const throttledHandleScroll = useThrottle(handleScroll, 1000); // Add throttle
+  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 1000); // Add debounce to prevent rapid scroll events
 
   useEffect(() => {
     window.addEventListener('wheel', debouncedHandleScroll, { passive: false });
