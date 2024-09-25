@@ -20,6 +20,15 @@ function FrozenRouter({ children }: { children: React.ReactNode }) {
 	);
 }
 
+function debounce<T extends (...args: never[]) => void>(fn: T, delay: number): (...args: Parameters<T>) => void {
+	let timeout: NodeJS.Timeout;
+	
+	return (...args: Parameters<T>) => {
+	  clearTimeout(timeout);
+	  timeout = setTimeout(() => fn(...args), delay);
+	};
+  }
+
 const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const router = useRouter();
@@ -33,34 +42,35 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
   
   const isScrollingRef = useRef(false);
 
-  const handleScroll = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    
-    if (isScrollingRef.current) {
-		console.log('delay scrolling');
-      	return;
-	  
-    } else {
-		console.log('scrolling');
-		
-	}
+  const handleScroll = useCallback(
+    debounce((e: WheelEvent) => {
+      e.preventDefault();
 
-    const currentIndex = routes.indexOf(pathname);
-    const direction = e.deltaY > 0 ? 1 : -1;
-    const newIndex = (currentIndex + direction + routes.length) % routes.length;
+      if (isScrollingRef.current) {
+        console.log('delay scrolling');
+        return;
+      } else {
+        console.log('scrolling');
+      }
 
-    if (newIndex !== currentIndex) {
-      isScrollingRef.current = true;
-      router.push(routes[newIndex]);
-      console.log('navigate to next route');
-	  
-      setTimeout(() => {
-        isScrollingRef.current = false;
-		console.log('end of delay scrolling');
-		
-      }, 3000);
-    }
-  }, [pathname, router, routes]);
+      const currentIndex = routes.indexOf(pathname);
+      const direction = e.deltaY > 0 ? 1 : -1;
+      const newIndex = (currentIndex + direction + routes.length) % routes.length;
+
+      if (newIndex !== currentIndex) {
+        isScrollingRef.current = true;
+        router.push(routes[newIndex]);
+        console.log('navigate to next route');
+
+        // Add delay before resetting scroll state
+        setTimeout(() => {
+          isScrollingRef.current = false;
+          console.log('end of delay scrolling');
+        }, 3000); // 3 second delay
+      }
+    }, 200), // Debounce by 200ms
+    [pathname, router, routes]
+  );
 
   useEffect(() => {
     window.addEventListener('wheel', handleScroll, { passive: false });
