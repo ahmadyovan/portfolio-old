@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -24,19 +24,15 @@ function useThrottle<T extends (...args: never[]) => void>(
   func: T,
   delay: number
 ): T {
-  const lastRun = useRef(0);
-  const timeout = useRef<NodeJS.Timeout | null>(null);
+  const isThrottling = useRef(false); // Replaces `isNavigating`
 
   return useCallback((...args: Parameters<T>) => {
-    const now = Date.now();
-    if (now - lastRun.current >= delay) {
-      func(...args);
-      lastRun.current = now;
-    } else {
-      if (timeout.current) clearTimeout(timeout.current);
-      timeout.current = setTimeout(() => {
-        func(...args);
-        lastRun.current = Date.now();
+    if (!isThrottling.current) {
+      func(...args); // Run the function if not throttled
+      isThrottling.current = true; // Set throttle flag
+
+      setTimeout(() => {
+        isThrottling.current = false; // Reset the throttle after delay
       }, delay);
     }
   }, [func, delay]) as T;
@@ -53,26 +49,20 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
     exit: { opacity: 0 },
   };
 
-  // Flag to prevent multiple navigation in one scroll
-  const [isNavigating, setIsNavigating] = useState(false);
-
   const handleScroll = useCallback((e: WheelEvent) => {
     e.preventDefault();
+    
+    const currentIndex = routes.indexOf(pathname);
+    const direction = e.deltaY > 0 ? 1 : -1;
+    const newIndex = (currentIndex + direction + routes.length) % routes.length;
 
-    if (!isNavigating) {
-      const currentIndex = routes.indexOf(pathname);
-      const direction = e.deltaY > 0 ? 1 : -1;
-      const newIndex = (currentIndex + direction + routes.length) % routes.length;
-
-      if (newIndex !== currentIndex) {
-        setIsNavigating(true); // Set flag to prevent further navigation
-        router.push(routes[newIndex]);
-        console.log('Navigating to next route:', routes[newIndex]);
-      }
+    if (newIndex !== currentIndex) {
+      router.push(routes[newIndex]);
+      console.log('Navigating to next route:', routes[newIndex]);
     }
-  }, [pathname, router, routes, isNavigating]);
+  }, [pathname, router, routes]);
 
-  const throttledHandleScroll = useThrottle(handleScroll, 1500);
+  const throttledHandleScroll = useThrottle(handleScroll, 2000);
 
   useEffect(() => {
     window.addEventListener('wheel', throttledHandleScroll, { passive: false });
@@ -81,17 +71,6 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
       window.removeEventListener('wheel', throttledHandleScroll);
     };
   }, [throttledHandleScroll]);
-
-  // Reset the `isNavigating` flag after 2 seconds to allow the next scroll navigation
-  useEffect(() => {
-    if (isNavigating) {
-      const timer = setTimeout(() => {
-        setIsNavigating(false); // Allow navigation again
-      }, 1500); // 2 seconds delay
-
-      return () => clearTimeout(timer); // Cleanup the timer on unmount
-    }
-  }, [isNavigating]);
 
   return (
     <div className='h-screen w-screen flex overflow-hidden'>
