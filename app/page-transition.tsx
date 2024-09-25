@@ -1,6 +1,6 @@
-'use client';
+'use client'
 
-import React, { useState, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -20,104 +20,100 @@ function FrozenRouter({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Throttle function
-const throttle = <Args extends unknown[]>(
-	func: (...args: Args) => void,
-	limit: number
-  ): (...args: Args) => void => {
-	let inThrottle = false;
-	return (...args: Args) => {
-	  if (!inThrottle) {
-		func(...args);
-		inThrottle = true;
-		setTimeout(() => inThrottle = false, limit);
-	  }
-	};
-};
+function useThrottle<T extends (...args: never[]) => void>(
+  func: T,
+  delay: number
+): T {
+  const lastRun = useRef(0);
+  const timeout = useRef<NodeJS.Timeout | null>(null);
 
-const PageTransitionEffect: React.FC<{ children: React.ReactNode }> = React.memo(({ children }) => {
-	const pathname = usePathname();
-	const router = useRouter();
-	const routes = useMemo(() => ['/', '/about', '/project'], []);
-	const [currentIndex, setCurrentIndex] = useState(() => routes.indexOf(pathname));
-	const [isNavigating, setIsNavigating] = useState(false);
-  
-	const variants = {
-	  hidden: { opacity: 0 },
-	  enter: { opacity: 1 },
-	  exit: { opacity: 0 },
-	};
-  
-	const handleScroll = useCallback((e: WheelEvent) => {
-	  e.preventDefault();
-	  if (isNavigating) return;
-  
-	  console.log('Scroll event processed');
-  
-	  const direction = e.deltaY > 0 ? 1 : -1;
-	  const newIndex = (currentIndex + direction + routes.length) % routes.length;
-  
-	  if (newIndex !== currentIndex) {
-		setIsNavigating(true);
-		setCurrentIndex(newIndex);
-		router.push(routes[newIndex]);
-		console.log(`Navigating to: ${routes[newIndex]}`);
-  
-		// Add a delay after navigation
-		setTimeout(() => {
-		  setIsNavigating(false);
-		}, 4000); // 1 second delay, adjust as needed
-	  }
-	}, [currentIndex, router, routes, isNavigating]);
-  
-	const throttledHandleScroll = useMemo(
-	  () => throttle(handleScroll, 5000),
-	  [handleScroll]
-	);
-  
-	useEffect(() => {
-	  console.log('Adding wheel event listener');
-	  window.addEventListener('wheel', throttledHandleScroll, { passive: false });
-  
-	  return () => {
-		console.log('Removing wheel event listener');
-		window.removeEventListener('wheel', throttledHandleScroll);
-	  };
-	}, [throttledHandleScroll]);
-  
-	useEffect(() => {
-	  console.log('Pathname changed. New pathname:', pathname);
-	  setCurrentIndex(routes.indexOf(pathname));
-	}, [pathname, routes]);
-  
-	return (
-	  <div className='h-screen w-screen flex overflow-hidden'>
-		<div className="h-full w-full flex px-10">
-		  <AnimatePresence mode='wait'>
-			<motion.div key={pathname} className='h-full w-full z-10'>
-			  <motion.div 
-				className="h-full w-full z-10 pl-[5%]" 
-				initial="hidden" 
-				animate="enter" 
-				exit="exit" 
-				variants={variants} 
-				transition={{ ease: 'easeInOut', duration: 0.5 }}
-			  >
-				<FrozenRouter>
-				  {children}  
-				</FrozenRouter>
-			  </motion.div>
-			</motion.div>
-		  </AnimatePresence>
-		  <div className="h-full w-1/5 flex items-center justify-end p-10 z-10">
-			<Navigation />
-		  </div>
-		</div>
-		<Background />  
-	  </div>
-	);
-  });
-  
-  PageTransitionEffect.displayName = 'PageTransitionEffect';
+  return useCallback((...args: Parameters<T>) => {
+    const now = Date.now();
+    if (now - lastRun.current >= delay) {
+      func(...args);
+      lastRun.current = now;
+    } else {
+      if (timeout.current) clearTimeout(timeout.current);
+      timeout.current = setTimeout(() => {
+        func(...args);
+        lastRun.current = Date.now();
+      }, delay);
+    }
+  }, [func, delay]) as T;
+}
+
+const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNode }) => {
+  const pathname = usePathname();
+  const router = useRouter();
+  const routes = useMemo(() => ['/', '/about', '/project'], []);
+
+  const variants = {
+    hidden: { opacity: 0 },
+    enter: { opacity: 1 },
+    exit: { opacity: 0 },
+  };
+
+  // Flag to prevent multiple navigation in one scroll
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const handleScroll = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+
+    if (!isNavigating) {
+      const currentIndex = routes.indexOf(pathname);
+      const direction = e.deltaY > 0 ? 1 : -1;
+      const newIndex = (currentIndex + direction + routes.length) % routes.length;
+
+      if (newIndex !== currentIndex) {
+        setIsNavigating(true); // Set flag to prevent further navigation
+        router.push(routes[newIndex]);
+        console.log('Navigating to next route:', routes[newIndex]);
+      }
+    }
+  }, [pathname, router, routes, isNavigating]);
+
+  const throttledHandleScroll = useThrottle(handleScroll, 1500);
+
+  useEffect(() => {
+    window.addEventListener('wheel', throttledHandleScroll, { passive: false });
+
+    return () => {
+      window.removeEventListener('wheel', throttledHandleScroll);
+    };
+  }, [throttledHandleScroll]);
+
+  // Reset the `isNavigating` flag after 2 seconds to allow the next scroll navigation
+  useEffect(() => {
+    if (isNavigating) {
+      const timer = setTimeout(() => {
+        setIsNavigating(false); // Allow navigation again
+      }, 1500); // 2 seconds delay
+
+      return () => clearTimeout(timer); // Cleanup the timer on unmount
+    }
+  }, [isNavigating]);
+
+  return (
+    <div className='h-screen w-screen flex overflow-hidden'>
+      <div className="h-full w-full flex px-10">
+        <AnimatePresence mode='wait'>
+          <motion.div key={pathname} className='h-full w-full z-10'>
+            <motion.div className="h-full w-full z-10 pl-[5%]" initial="hidden" animate="enter" exit="exit" variants={variants} transition={{ ease: 'easeInOut', duration: 0.5 }}>
+              <FrozenRouter>
+                {children}  
+              </FrozenRouter>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
+        <div className="h-full w-1/5 flex items-center justify-end p-10 z-10">
+          <Navigation />
+        </div>
+      </div>
+      <Background />  
+    </div>
+  );
+});
+
+PageTransitionEffect.displayName = 'PageTransitionEffect';
 
 export default PageTransitionEffect;
