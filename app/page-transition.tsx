@@ -113,7 +113,7 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
 
         setTimeout(() => {
           isScrolling.current = false; // Reset after 2 seconds
-        }, 2000);
+        }, 1000);
       }
     }
 
@@ -139,6 +139,9 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
     };
   }, [debouncedHandleScroll, handleTouchStart, handleTouchEnd]);
 
+  console.log('render');
+  
+
   return (
     <div className='h-screen w-screen flex overflow-hidden'>
       <div className="h-full w-full flex px-10">
@@ -150,7 +153,7 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
               exit: { opacity: 0 },
             }} transition={{ ease: 'easeInOut', duration: 0.5 }}>
               <FrozenRouter>
-                {children}
+      {children}
               </FrozenRouter>
             </motion.div>
           </motion.div>
