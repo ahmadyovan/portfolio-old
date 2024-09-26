@@ -13,7 +13,7 @@ const Home = () => {
 
 	return (
 		<div className={`h-full w-full font-noticia-text flex items-center ` + Noticia.className}>
-			<div className="flex flex-col items-end pt-32">
+			<div className="flex flex-col pl-[5%] items-end pt-32">
 				<motion.div variants={variant} initial='initial' animate='animate' exit='exit' transition={{type: "tween", duration: 0.6, ease: "easeOut"}}>
 					<h1 className="text-[8vh] text-neutral-300 leading-[7vh]">AHMAD YOVAN</h1>
 				</motion.div>

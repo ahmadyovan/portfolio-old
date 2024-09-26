@@ -81,12 +81,12 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
 
       setTimeout(() => {
         isScrolling.current = false; // Reset after delay (2 seconds)
-      }, 500); // 2 seconds delay
+      }, 1000); // 2 seconds delay
     }
   }, [pathname, router, routes]);
 
-  const throttledHandleScroll = useThrottle(handleScroll, 500); // Add throttle
-  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 500); // Add debounce to prevent rapid scroll events
+  const throttledHandleScroll = useThrottle(handleScroll, 1500); // Add throttle
+  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 0); // Add debounce to prevent rapid scroll events
 
   useEffect(() => {
     window.addEventListener('wheel', debouncedHandleScroll, { passive: false });
