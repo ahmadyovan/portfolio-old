@@ -23,7 +23,7 @@ function FrozenRouter({ children }: { children: React.ReactNode }) {
 function useThrottle<T extends (...args: never[]) => void>(
   func: T,
   delay: number
-): T {
+): (...args: Parameters<T>) => void {
   const lastRun = useRef(0);
 
   return useCallback((...args: Parameters<T>) => {
@@ -32,13 +32,13 @@ function useThrottle<T extends (...args: never[]) => void>(
       func(...args);
       lastRun.current = now;
     }
-  }, [func, delay]) as T;
+  }, [func, delay]);
 }
 
 function useDebounce<T extends (...args: never[]) => void>(
   func: T,
   delay: number
-): T {
+): (...args: Parameters<T>) => void {
   const timeout = useRef<NodeJS.Timeout | null>(null);
 
   return useCallback((...args: Parameters<T>) => {
@@ -48,22 +48,19 @@ function useDebounce<T extends (...args: never[]) => void>(
     timeout.current = setTimeout(() => {
       func(...args);
     }, delay);
-  }, [func, delay]) as T;
+  }, [func, delay]);
 }
+
 
 const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const router = useRouter();
   const routes = useMemo(() => ['/', '/about', '/project'], []);
 
-  const variants = {
-    hidden: { opacity: 0 },
-    enter: { opacity: 1 },
-    exit: { opacity: 0 },
-  };
-
   const isScrolling = useRef(false); // Track if a scroll event is in progress
+  const touchStartY = useRef<number | null>(null); // Track touch start position
 
+  // Handle scroll events (for desktop)
   const handleScroll = useCallback((e: WheelEvent) => {
     if (isScrolling.current) return; // Prevent multiple navigation triggers
 
@@ -81,29 +78,79 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
 
       setTimeout(() => {
         isScrolling.current = false; // Reset after delay (2 seconds)
-      }, 1000); // 2 seconds delay
+      }, 2000); // 2 seconds delay
     }
   }, [pathname, router, routes]);
 
-  const throttledHandleScroll = useThrottle(handleScroll, 1500); // Add throttle
-  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 100); // Add debounce to prevent rapid scroll events
+  // Handle swipe events (for mobile)
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY; // Get Y position where the touch started
+  }, []);
+
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    if (touchStartY.current === null) return;
+
+    const touchEndY = e.changedTouches[0].clientY; // Get Y position where the touch ended
+    const diffY = touchStartY.current - touchEndY; // Calculate the difference
+
+    const currentIndex = routes.indexOf(pathname);
+    let newIndex = currentIndex;
+
+    if (Math.abs(diffY) > 50) { // Only consider swipe if the movement is significant
+      if (diffY > 0) {
+        // Swipe up - go to next
+        newIndex = (currentIndex + 1) % routes.length;
+      } else {
+        // Swipe down - go to previous
+        newIndex = (currentIndex - 1 + routes.length) % routes.length;
+      }
+
+      if (newIndex !== currentIndex) {
+        isScrolling.current = true; // Prevent further swipes until the navigation completes
+
+        router.push(routes[newIndex]);
+        console.log('Navigating to next route (Swipe):', routes[newIndex]);
+
+        setTimeout(() => {
+          isScrolling.current = false; // Reset after 2 seconds
+        }, 2000);
+      }
+    }
+
+    touchStartY.current = null; // Reset the touch start position
+  }, [pathname, router, routes]);
+
+  const throttledHandleScroll = useThrottle(handleScroll, 1000); // Throttle for scroll events
+  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 100); // Debounce to smooth the scroll event
 
   useEffect(() => {
+    // Add event listeners for desktop scrolling
     window.addEventListener('wheel', debouncedHandleScroll, { passive: false });
 
+    // Add event listeners for mobile swipe gestures
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
     return () => {
+      // Remove event listeners
       window.removeEventListener('wheel', debouncedHandleScroll);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [debouncedHandleScroll]);
+  }, [debouncedHandleScroll, handleTouchStart, handleTouchEnd]);
 
   return (
     <div className='h-screen w-screen flex overflow-hidden'>
       <div className="h-full w-full flex px-10">
         <AnimatePresence mode='wait'>
           <motion.div key={pathname} className='h-full w-full z-10'>
-            <motion.div className="h-full w-full z-10 pl-[5%]" initial="hidden" animate="enter" exit="exit" variants={variants} transition={{ ease: 'easeInOut', duration: 0.5 }}>
+            <motion.div className="h-full w-full z-10 pl-[5%]" initial="hidden" animate="enter" exit="exit" variants={{
+              hidden: { opacity: 0 },
+              enter: { opacity: 1 },
+              exit: { opacity: 0 },
+            }} transition={{ ease: 'easeInOut', duration: 0.5 }}>
               <FrozenRouter>
-                {children}  
+                {children}
               </FrozenRouter>
             </motion.div>
           </motion.div>
@@ -112,7 +159,7 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
           <Navigation />
         </div>
       </div>
-      <Background />  
+      <Background />
     </div>
   );
 });
