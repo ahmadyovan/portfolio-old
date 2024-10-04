@@ -113,15 +113,15 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
 
         setTimeout(() => {
           isScrolling.current = false; // Reset after 2 seconds
-        }, 1000);
+        }, 100);
       }
     }
 
     touchStartY.current = null; // Reset the touch start position
   }, [pathname, router, routes]);
 
-  const throttledHandleScroll = useThrottle(handleScroll, 1000); // Throttle for scroll events
-  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 100); // Debounce to smooth the scroll event
+  const throttledHandleScroll = useThrottle(handleScroll, 100); // Throttle for scroll events
+  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 1000); // Debounce to smooth the scroll event
 
   useEffect(() => {
     // Add event listeners for desktop scrolling
