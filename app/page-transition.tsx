@@ -21,7 +21,7 @@ function FrozenRouter({ children }: { children: React.ReactNode }) {
 }
 
 const SCROLL_DELAY = 2000;
-const NAVIGATION_COOLDOWN = 500;
+const NAVIGATION_COOLDOWN = 1000;
 
 const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
