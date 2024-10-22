@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -20,140 +20,98 @@ function FrozenRouter({ children }: { children: React.ReactNode }) {
   );
 }
 
-function useThrottle<T extends (...args: never[]) => void>(
-  func: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  const lastRun = useRef(0);
-
-  return useCallback((...args: Parameters<T>) => {
-    const now = Date.now();
-    if (now - lastRun.current >= delay) {
-      func(...args);
-      lastRun.current = now;
-    }
-  }, [func, delay]);
-}
-
-function useDebounce<T extends (...args: never[]) => void>(
-  func: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  const timeout = useRef<NodeJS.Timeout | null>(null);
-
-  return useCallback((...args: Parameters<T>) => {
-    if (timeout.current) {
-      clearTimeout(timeout.current);
-    }
-    timeout.current = setTimeout(() => {
-      func(...args);
-    }, delay);
-  }, [func, delay]);
-}
-
-
 const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const router = useRouter();
   const routes = useMemo(() => ['/', '/about', '/project'], []);
+  
+  // Use state to track navigation status
+  const [isNavigating, setIsNavigating] = useState(false);
+  const lastNavigationTime = useRef(0);
+  const touchStartY = useRef<number | null>(null);
 
-  const isScrolling = useRef(false); // Track if a scroll event is in progress
-  const touchStartY = useRef<number | null>(null); // Track touch start position
-
-  // Handle scroll events (for desktop)
-  const handleScroll = useCallback((e: WheelEvent) => {
-    if (isScrolling.current) return; // Prevent multiple navigation triggers
-
-    e.preventDefault();
+  const handleNavigation = useCallback((direction: number) => {
+    const now = Date.now();
+    const timeSinceLastNavigation = now - lastNavigationTime.current;
+    
+    // Prevent navigation if we're already navigating or if it's too soon
+    if (isNavigating || timeSinceLastNavigation < 1000) {
+      return;
+    }
 
     const currentIndex = routes.indexOf(pathname);
-    const direction = e.deltaY > 0 ? 1 : -1;
     const newIndex = (currentIndex + direction + routes.length) % routes.length;
 
     if (newIndex !== currentIndex) {
-      isScrolling.current = true; // Set flag to prevent further scrolling
+      setIsNavigating(true);
+      lastNavigationTime.current = now;
 
       router.push(routes[newIndex]);
-      console.log('Navigating to next route:', routes[newIndex]);
 
+      // Reset navigation state after animation completes
       setTimeout(() => {
-        isScrolling.current = false; // Reset after delay (2 seconds)
-      }, 2000); // 2 seconds delay
+        setIsNavigating(false);
+      }, 1000);
     }
-  }, [pathname, router, routes]);
+  }, [isNavigating, pathname, router, routes]);
 
-  // Handle swipe events (for mobile)
+  // Handle scroll events (for desktop)
+  const handleScroll = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    const direction = e.deltaY > 0 ? 1 : -1;
+    handleNavigation(direction);
+  }, [handleNavigation]);
+
+  // Handle touch events (for mobile)
   const handleTouchStart = useCallback((e: TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY; // Get Y position where the touch started
+    touchStartY.current = e.touches[0].clientY;
   }, []);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
     if (touchStartY.current === null) return;
 
-    const touchEndY = e.changedTouches[0].clientY; // Get Y position where the touch ended
-    const diffY = touchStartY.current - touchEndY; // Calculate the difference
+    const touchEndY = e.changedTouches[0].clientY;
+    const diffY = touchStartY.current - touchEndY;
 
-    const currentIndex = routes.indexOf(pathname);
-    let newIndex = currentIndex;
-
-    if (Math.abs(diffY) > 50) { // Only consider swipe if the movement is significant
-      if (diffY > 0) {
-        // Swipe up - go to next
-        newIndex = (currentIndex + 1) % routes.length;
-      } else {
-        // Swipe down - go to previous
-        newIndex = (currentIndex - 1 + routes.length) % routes.length;
-      }
-
-      if (newIndex !== currentIndex) {
-        isScrolling.current = true; // Prevent further swipes until the navigation completes
-
-        router.push(routes[newIndex]);
-        console.log('Navigating to next route (Swipe):', routes[newIndex]);
-
-        setTimeout(() => {
-          isScrolling.current = false; // Reset after 2 seconds
-        }, 1000);
-      }
+    if (Math.abs(diffY) > 50) {
+      const direction = diffY > 0 ? 1 : -1;
+      handleNavigation(direction);
     }
 
-    touchStartY.current = null; // Reset the touch start position
-  }, [pathname, router, routes]);
-
-  const throttledHandleScroll = useThrottle(handleScroll, 1000); // Throttle for scroll events
-  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 0); // Debounce to smooth the scroll event
+    touchStartY.current = null;
+  }, [handleNavigation]);
 
   useEffect(() => {
-    // Add event listeners for desktop scrolling
-    window.addEventListener('wheel', debouncedHandleScroll, { passive: false });
-
-    // Add event listeners for mobile swipe gestures
+    window.addEventListener('wheel', handleScroll, { passive: false });
     window.addEventListener('touchstart', handleTouchStart, { passive: true });
     window.addEventListener('touchend', handleTouchEnd, { passive: true });
 
     return () => {
-      // Remove event listeners
-      window.removeEventListener('wheel', debouncedHandleScroll);
+      window.removeEventListener('wheel', handleScroll);
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [debouncedHandleScroll, handleTouchStart, handleTouchEnd]);
-
-  console.log('render');
-  
+  }, [handleScroll, handleTouchStart, handleTouchEnd]);
 
   return (
     <div className='h-screen w-screen flex overflow-hidden'>
       <div className="h-full w-full flex px-10">
         <AnimatePresence mode='wait'>
           <motion.div key={pathname} className='h-full w-full z-10'>
-            <motion.div className="h-full w-full z-10 pl-[5%]" initial="hidden" animate="enter" exit="exit" variants={{
-              hidden: { opacity: 0 },
-              enter: { opacity: 1 },
-              exit: { opacity: 0 },
-            }} transition={{ ease: 'easeInOut', duration: 0.5 }}>
+            <motion.div 
+              className="h-full w-full z-10 pl-[5%]" 
+              initial="hidden" 
+              animate="enter" 
+              exit="exit" 
+              variants={{
+                hidden: { opacity: 0 },
+                enter: { opacity: 1 },
+                exit: { opacity: 0 },
+              }} 
+              transition={{ ease: 'easeInOut', duration: 0.5 }}
+            >
               <FrozenRouter>
-      {children}
+                {children}
               </FrozenRouter>
             </motion.div>
           </motion.div>
