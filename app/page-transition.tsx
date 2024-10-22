@@ -20,22 +20,25 @@ function FrozenRouter({ children }: { children: React.ReactNode }) {
   );
 }
 
+const SCROLL_DELAY = 2000; // Waktu delay setelah scroll dalam milliseconds
+const NAVIGATION_COOLDOWN = 500; // Cooldown antara navigasi dalam milliseconds
+
 const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const router = useRouter();
   const routes = useMemo(() => ['/', '/about', '/project'], []);
   
-  // Use state to track navigation status
   const [isNavigating, setIsNavigating] = useState(false);
-  const lastNavigationTime = useRef(0);
+  const lastNavigationTime = useRef(Date.now());
   const touchStartY = useRef<number | null>(null);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const handleNavigation = useCallback((direction: number) => {
     const now = Date.now();
     const timeSinceLastNavigation = now - lastNavigationTime.current;
     
-    // Prevent navigation if we're already navigating or if it's too soon
-    if (isNavigating || timeSinceLastNavigation < 1000) {
+    // Cek apakah cukup waktu telah berlalu sejak navigasi terakhir
+    if (isNavigating || timeSinceLastNavigation < NAVIGATION_COOLDOWN) {
       return;
     }
 
@@ -46,40 +49,54 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
       setIsNavigating(true);
       lastNavigationTime.current = now;
 
+      // Jalankan navigasi
       router.push(routes[newIndex]);
 
-      // Reset navigation state after animation completes
-      setTimeout(() => {
+      // Set timer untuk delay scroll
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
+
+      scrollTimeout.current = setTimeout(() => {
         setIsNavigating(false);
-      }, 1000);
+        scrollTimeout.current = null;
+      }, SCROLL_DELAY);
     }
   }, [isNavigating, pathname, router, routes]);
 
-  // Handle scroll events (for desktop)
+  // Handle scroll events (desktop)
   const handleScroll = useCallback((e: WheelEvent) => {
     e.preventDefault();
+
+    // Cek apakah sedang dalam delay
+    if (scrollTimeout.current) {
+      return;
+    }
+
     const direction = e.deltaY > 0 ? 1 : -1;
     handleNavigation(direction);
   }, [handleNavigation]);
 
-  // Handle touch events (for mobile)
+  // Handle touch events (mobile)
   const handleTouchStart = useCallback((e: TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-  }, []);
+    if (!isNavigating) {
+      touchStartY.current = e.touches[0].clientY;
+    }
+  }, [isNavigating]);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
-    if (touchStartY.current === null) return;
+    if (touchStartY.current === null || isNavigating) return;
 
     const touchEndY = e.changedTouches[0].clientY;
     const diffY = touchStartY.current - touchEndY;
 
-    if (Math.abs(diffY) > 50) {
+    if (Math.abs(diffY) > 50) { // Minimal swipe distance
       const direction = diffY > 0 ? 1 : -1;
       handleNavigation(direction);
     }
 
     touchStartY.current = null;
-  }, [handleNavigation]);
+  }, [handleNavigation, isNavigating]);
 
   useEffect(() => {
     window.addEventListener('wheel', handleScroll, { passive: false });
@@ -90,6 +107,11 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
       window.removeEventListener('wheel', handleScroll);
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchend', handleTouchEnd);
+      
+      // Clear any existing timeout on unmount
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
     };
   }, [handleScroll, handleTouchStart, handleTouchEnd]);
 
