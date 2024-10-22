@@ -1,8 +1,8 @@
 'use client'
 
 import Image from 'next/image'
-import previewproject from "@/public/project.png"
 import gamedev from "@/public/game_dev.jpeg"
+import courseScheduler from "@/public/course-schedule-app.png"
 import { useEffect, useMemo, useState } from "react";
 import { Noticia } from '@/app/font';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -14,16 +14,16 @@ const Home = () => {
 	const [currentPage, setCurrentPage] = useState(1);
 	const projects = useMemo(() => [
 		{
-		name: 'Project Website',
-		image: previewproject,
-		category: 'Web',
-		description: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Obcaecati sapiente, expedita ad esse placeat, fugit laudantium sed incidunt libero delectus eligendi assumenda exercitationem excepturi, debitis voluptas qui eveniet veritatis earum?',
+			name: 'Course-Schedule-App',
+			image: courseScheduler,
+			category: 'Web',
+			description: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsa sunt facere unde nisi reprehenderit ullam esse laudantium voluptatibus asperiores qui saepe vero consectetur consequuntur nobis fugit quaerat, incidunt quia quasi!',
 		},
 		{
-		name: 'Project Game',
-		image: gamedev,
-		category: 'Game',
-		description: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsa sunt facere unde nisi reprehenderit ullam esse laudantium voluptatibus asperiores qui saepe vero consectetur consequuntur nobis fugit quaerat, incidunt quia quasi!',
+			name: 'Project Game',
+			image: gamedev,
+			category: 'Game',
+			description: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsa sunt facere unde nisi reprehenderit ullam esse laudantium voluptatibus asperiores qui saepe vero consectetur consequuntur nobis fugit quaerat, incidunt quia quasi!',
 		},
 		// Add more projects to the array
 	], []);
@@ -34,9 +34,6 @@ const Home = () => {
 			setCurrentIndex((currentIndex + 1) % projects.length);
 		}
 		}, 3000);
-
-
-
 		return () => {
 		clearInterval(id);
 		};

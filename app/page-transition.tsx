@@ -121,7 +121,7 @@ const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNo
   }, [pathname, router, routes]);
 
   const throttledHandleScroll = useThrottle(handleScroll, 1000); // Throttle for scroll events
-  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 1000); // Debounce to smooth the scroll event
+  const debouncedHandleScroll = useDebounce(throttledHandleScroll, 0); // Debounce to smooth the scroll event
 
   useEffect(() => {
     // Add event listeners for desktop scrolling
