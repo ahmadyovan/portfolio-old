@@ -20,186 +20,153 @@ function FrozenRouter({ children }: { children: React.ReactNode }) {
   );
 }
 
-const SCROLL_DELAY = 2000;
-const NAVIGATION_COOLDOWN = 1000;
-const ANIMATION_DURATION = 500; // Animation duration in milliseconds
+const ANIMATION_DURATION = 500;
 
-const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNode }) => {
-  const pathname = usePathname();
+// Custom hook untuk mengelola transisi
+const usePageTransition = (routes: string[]) => {
   const router = useRouter();
-  const routes = useMemo(() => ['/', '/about', '/project'], []);
-  
-  const [isNavigating, setIsNavigating] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
-  const lastNavigationTime = useRef(Date.now());
-  const touchStartY = useRef<number | null>(null);
-  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
-  const previousPathname = useRef(pathname);
-  const exitComplete = useRef(false);
+  const pathname = usePathname();
+  const [currentPage, setCurrentPage] = useState(pathname);
+  const [nextPage, setNextPage] = useState<string | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
 
-  // Reset navigation state when pathname changes
-  useEffect(() => {
-    if (previousPathname.current !== pathname) {
-      if (scrollTimeout.current) {
-        clearTimeout(scrollTimeout.current);
-      }
-      setIsNavigating(false);
-      setIsExiting(false);
-      exitComplete.current = false;
-      lastNavigationTime.current = Date.now();
-      previousPathname.current = pathname;
-    }
-  }, [pathname]);
+  const navigate = useCallback(async (direction: number) => {
+    if (isAnimating) return;
 
-  const handleNavigation = useCallback(async (direction: number) => {
-    const now = Date.now();
-    const timeSinceLastNavigation = now - lastNavigationTime.current;
-    
-    if (isNavigating || isExiting || timeSinceLastNavigation < NAVIGATION_COOLDOWN) {
-      return;
-    }
-
-    const currentIndex = routes.indexOf(pathname);
+    const currentIndex = routes.indexOf(currentPage);
     const newIndex = (currentIndex + direction + routes.length) % routes.length;
+    const targetRoute = routes[newIndex];
 
-    if (newIndex !== currentIndex) {
-      setIsNavigating(true);
-      setIsExiting(true);
-      lastNavigationTime.current = now;
-
-      // Wait for exit animation
+    if (targetRoute !== currentPage) {
+      setIsAnimating(true);
+      setNextPage(targetRoute);
+      
+      // Tunggu animasi exit selesai sebelum navigasi
       await new Promise(resolve => setTimeout(resolve, ANIMATION_DURATION));
       
-      if (!exitComplete.current) {
-        router.push(routes[newIndex]);
-      }
-
-      if (scrollTimeout.current) {
-        clearTimeout(scrollTimeout.current);
-      }
-
-      scrollTimeout.current = setTimeout(() => {
-        setIsNavigating(false);
-        setIsExiting(false);
-        exitComplete.current = false;
-        scrollTimeout.current = null;
-        lastNavigationTime.current = Date.now();
-      }, SCROLL_DELAY);
+      router.push(targetRoute);
+      setCurrentPage(targetRoute);
+      
+      // Reset state setelah navigasi
+      setTimeout(() => {
+        setIsAnimating(false);
+        setNextPage(null);
+      }, ANIMATION_DURATION);
     }
-  }, [isNavigating, isExiting, pathname, router, routes]);
+  }, [currentPage, routes, router, isAnimating]);
+
+  return {
+    currentPage,
+    nextPage,
+    isAnimating,
+    navigate
+  };
+};
+
+const PageTransitionEffect = React.memo(({ children }: { children: React.ReactNode }) => {
+  const routes = useMemo(() => ['/', '/about', '/project'], []);
+  const { currentPage, isAnimating, navigate } = usePageTransition(routes);
+  
+  const touchStartY = useRef<number | null>(null);
+  const lastScrollTime = useRef(Date.now());
+  const SCROLL_COOLDOWN = 1000;
 
   const handleScroll = useCallback((e: WheelEvent) => {
     e.preventDefault();
 
-    if (isNavigating || isExiting || scrollTimeout.current || 
-        (Date.now() - lastNavigationTime.current) < NAVIGATION_COOLDOWN) {
+    const now = Date.now();
+    if (now - lastScrollTime.current < SCROLL_COOLDOWN || isAnimating) {
       return;
     }
 
+    lastScrollTime.current = now;
     const direction = e.deltaY > 0 ? 1 : -1;
-    handleNavigation(direction);
-  }, [handleNavigation, isNavigating, isExiting]);
+    navigate(direction);
+  }, [navigate, isAnimating]);
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (!isNavigating && !isExiting && !scrollTimeout.current) {
+    if (!isAnimating) {
       touchStartY.current = e.touches[0].clientY;
     }
-  }, [isNavigating, isExiting]);
+  }, [isAnimating]);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
-    if (touchStartY.current === null || isNavigating || isExiting || scrollTimeout.current) return;
+    if (touchStartY.current === null || isAnimating) return;
 
     const touchEndY = e.changedTouches[0].clientY;
     const diffY = touchStartY.current - touchEndY;
 
     if (Math.abs(diffY) > 50) {
       const direction = diffY > 0 ? 1 : -1;
-      handleNavigation(direction);
+      navigate(direction);
     }
 
     touchStartY.current = null;
-  }, [handleNavigation, isNavigating, isExiting]);
-
-  const cleanup = useCallback(() => {
-    if (scrollTimeout.current) {
-      clearTimeout(scrollTimeout.current);
-      scrollTimeout.current = null;
-    }
-    setIsNavigating(false);
-    setIsExiting(false);
-    exitComplete.current = false;
-    touchStartY.current = null;
-  }, []);
+  }, [navigate, isAnimating]);
 
   useEffect(() => {
     window.addEventListener('wheel', handleScroll, { passive: false });
     window.addEventListener('touchstart', handleTouchStart, { passive: true });
     window.addEventListener('touchend', handleTouchEnd, { passive: true });
 
-    cleanup();
-
     return () => {
       window.removeEventListener('wheel', handleScroll);
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchend', handleTouchEnd);
-      cleanup();
     };
-  }, [handleScroll, handleTouchStart, handleTouchEnd, cleanup]);
+  }, [handleScroll, handleTouchStart, handleTouchEnd]);
 
-  useEffect(() => {
-    const handleBlur = () => {
-      cleanup();
-    };
-
-    window.addEventListener('blur', handleBlur);
-    return () => {
-      window.removeEventListener('blur', handleBlur);
-    };
-  }, [cleanup]);
+  // Variants untuk animasi
+  const pageVariants = {
+    initial: {
+      opacity: 0,
+      y: 20,
+    },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: ANIMATION_DURATION / 1000,
+        ease: [0.43, 0.13, 0.23, 0.96] // Improved easing
+      }
+    },
+    exit: {
+      opacity: 0,
+      y: -20,
+      transition: {
+        duration: ANIMATION_DURATION / 1000,
+        ease: [0.43, 0.13, 0.23, 0.96]
+      }
+    }
+  };
 
   return (
     <div className='h-screen w-screen flex overflow-hidden'>
-      <div className="h-full w-full flex px-10">
-        <AnimatePresence mode='wait' onExitComplete={() => {
-          exitComplete.current = true;
-          setIsExiting(false);
-        }}>
-          <motion.div 
-            key={pathname} 
-            className='h-full w-full z-10'
-            initial="hidden"
-            animate="enter"
-            exit="exit"
-            variants={{
-              hidden: { 
-                opacity: 0,
-                y: 20 
-              },
-              enter: { 
-                opacity: 1,
-                y: 0,
-                transition: {
-                  duration: ANIMATION_DURATION / 1000,
-                  ease: 'easeOut'
-                }
-              },
-              exit: { 
-                opacity: 0,
-                y: -20,
-                transition: {
-                  duration: ANIMATION_DURATION / 1000,
-                  ease: 'easeIn'
-                }
-              }
-            }}
-          >
-            <motion.div className="h-full w-full z-10 pl-[5%]">
-              <FrozenRouter>
-                {children}
-              </FrozenRouter>
+      <div className="h-full w-full flex px-10 z-50">
+        <div className="h-full w-full relative">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={currentPage}
+              className="h-full w-full absolute top-0 left-0"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              onAnimationStart={() => {
+                document.body.style.pointerEvents = 'none';
+              }}
+              onAnimationComplete={() => {
+                document.body.style.pointerEvents = 'auto';
+              }}
+            >
+              <div className="h-full w-full z-10 pl-[5%]">
+                <FrozenRouter>
+                  {children}
+                </FrozenRouter>
+              </div>
             </motion.div>
-          </motion.div>
-        </AnimatePresence>
+          </AnimatePresence>
+        </div>
         <div className="h-full w-1/5 flex items-center justify-end p-10 z-10">
           <Navigation />
         </div>
