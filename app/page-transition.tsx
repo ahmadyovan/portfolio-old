@@ -3,7 +3,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { AnimatePresence } from 'framer-motion';
 import Navigation from '@/app/component/navigation';
 import Background from '@/app/component/background';
 
@@ -80,9 +79,7 @@ export default function PageWrapper({ children }: { children: React.ReactNode })
     <div className='h-screen w-screen flex overflow-hidden'>
       <div className="h-full w-full flex px-10 z-10">
         <div className="h-full w-full">
-          <AnimatePresence mode="wait" initial={false}>
-            {children}
-          </AnimatePresence>
+          {children}
         </div>
         <div className="h-full w-1/5 flex items-center justify-end p-10 z-10">
           <Navigation />
