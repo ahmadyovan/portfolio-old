@@ -1,12 +1,30 @@
-// components/PageWrapper.tsx
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Navigation from '@/app/component/navigation';
 import Background from '@/app/component/background';
+import { LayoutRouterContext } from 'next/dist/shared/lib/app-router-context.shared-runtime';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Noticia } from './font';
 
 const SCROLL_DELAY = 1000;
+
+// Definisikan variants untuk animasi
+
+
+function FrozenRouter({ children }: { children: React.ReactNode }) {
+	const context = useContext(LayoutRouterContext);
+	const frozen = useRef(context).current;
+
+	return frozen ? (
+		<LayoutRouterContext.Provider value={frozen}>
+			{children}
+		</LayoutRouterContext.Provider>
+	) : (
+		<>{children}</>
+	);
+}
 
 export default function PageWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -75,12 +93,39 @@ export default function PageWrapper({ children }: { children: React.ReactNode })
     };
   }, [handleWheel, handleTouchStart, handleTouchEnd]);
 
+  const Variants = {
+    initial: {
+      opacity: 0,
+    },
+    animate: {
+      opacity: 1,
+      transition: {
+        duration: 0.5,
+        ease: 'easeInOut'
+      }
+    },
+    exit: {
+      opacity: 0,
+      transition: {
+        duration: 0.5,
+        ease: 'easeInOut'
+      }
+    }
+  };
+
   return (
     <div className='h-screen w-screen flex overflow-hidden'>
-      <div className="h-full w-full flex px-10 z-10">
-        <div className="h-full w-full">
-          {children}
-        </div>
+      <div className="h-full w-full flex px-10 z-10 overflow-hidden">
+          <AnimatePresence mode='wait'>
+            <motion.div key={pathname} className='h-full w-full z-10'>
+              <motion.div  className={`h-full w-full z-10 pl-[5%]` + Noticia.className}  initial="initial" animate="animate" exit="exit" variants={Variants} transition={{ ease: 'easeInOut' }}>
+                <FrozenRouter>
+                  {children}  
+                </FrozenRouter>
+              </motion.div>
+            </motion.div>
+					</AnimatePresence>
+        
         <div className="h-full w-1/5 flex items-center justify-end p-10 z-10">
           <Navigation />
         </div>

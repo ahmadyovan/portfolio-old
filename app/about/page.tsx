@@ -9,10 +9,15 @@ import nextjslogo from '@/public/next-js.svg'
 import tailwindcsslogo from '@/public/tailwind-css-2.svg'
 import phplogo from '@/public/php.svg'
 import laravellogo from '@/public/laravel-2.svg'
-import { Noticia } from '@/app/font'
-
+import { motion } from 'framer-motion'
 
 const Home = () => {
+
+	const variant = {
+		initial: { x: -100, opacity: 1},
+		animate: { x: 0, opacity: 1},
+		exit: { x: 100, opacity: 1},
+	}	
 
 	const skills = [
 		{ id: 1, name: 'HTML', logo: htmllogo, progress: '80%' },
@@ -25,16 +30,16 @@ const Home = () => {
 		{ id: 8, name: 'laravel', logo: laravellogo, progress: '60%' },
 	  ];
 
-	//   console.log('render');
+	  console.log('render');
 	  
 
     return(
-        <div className={`h-full w-full font-noticia-text flex flex-col gap-5 justify-center items-center pb-5 ` + Noticia.className}>
-			<div className="flex flex-col items-start w-full bg-[#13131379] rounded-lg p-6">
+        <div className={`h-full w-full font-noticia-text flex flex-col gap-5 justify-center items-center pb-5`}>
+			<motion.div variants={variant} initial='initial' animate='animate' exit='exit' transition={{type: "tween", duration: 0.6, ease: "easeOut"}} className="flex flex-col items-start w-full bg-[#13131379] rounded-lg p-6">
 				<h1 className="text-[7vh]">About</h1>
 				<p className="text-justify text-[3vh]">I am a student just beginning my journey in programming, with a strong determination to continuously learn and grow. With the foundational knowledge of programming that I have acquired, I am eager to explore more in-depth topics like web development, applications, and other technologies. </p>
-			</div>
-			<div className="flex flex-col items-start w-full bg-[#13131379] rounded-lg p-6">
+			</motion.div>
+			<motion.div variants={variant} initial='initial' animate='animate' exit='exit' transition={{type: "tween", duration: 0.6, ease: "easeOut"}} className="flex flex-col items-start w-full bg-[#13131379] rounded-lg p-6">
 				<h1 className="text-[7vh]">Skill</h1>
 				<p className="text-[3vh]">The tools and technologies I have already learned</p>
 				<div className="w-full flex flex-wrap gap-5 pt-5">
@@ -52,7 +57,7 @@ const Home = () => {
 						</div>
 					))}
 				</div>
-			</div>
+			</motion.div>
 		</div>
     )
 }
